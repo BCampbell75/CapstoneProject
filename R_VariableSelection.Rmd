@@ -1,0 +1,42 @@
+---
+title: "Untitled"
+author: "Brent Campbell"
+date: "June 8, 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r}
+Year1 <- read.csv(file="C:/Users/BCamp/Desktop/Capstone Project/DataYear1_v2.csv", header=TRUE, sep=",")
+
+#Normalize the data, and run correlation for all variables vs. Bankruptcy Outcome
+normalize <- function(x) {
+               return ((x - min(x)) / (max(x) - min(x))) }
+Year1.Norm <- prc_n <- as.data.frame(lapply(Year1[1:63], normalize))
+cor(Year1.Norm, Year1$Bankruptcy.Outcome)
+```
+
+```{r}
+#Use GLM to use P-value to validate the importance of teh variables. 
+library(mlbench)
+sum(Year1.Norm$Bankruptcy.Outcome)
+fit_glm = glm(Bankruptcy.Outcome~., data = Year1.Norm, family = "binomial")
+summary(fit_glm)
+```
+```{r}
+library(caret)
+install.packages("randomForest")
+library(randomForest)
+fit_rf = randomForest(Bankruptcy.Outcome~., data=Year1.Norm)
+importance(fit_rf)
+```
+
