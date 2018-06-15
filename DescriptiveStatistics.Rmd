@@ -1,0 +1,57 @@
+---
+title: "Untitled"
+author: "Brent Campbell"
+date: "June 14, 2018"
+output:
+  word_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+Year1 <- read.csv(file="C:/Users/BCamp/Desktop/Capstone Project/Literature Review/Year1.FR.csv", header=TRUE, sep=",")
+
+Year3 <- read.csv(file="C:/Users/BCamp/Desktop/Capstone Project/Literature Review/Year3.FR.csv", header=TRUE, sep=",")
+
+str(Year1)
+str(Year3)
+
+```
+
+```{r}
+install.packages("knitr", repos = "http://cran.us.r-project.org")
+library("knitr")
+```
+
+
+```{r}
+#Year1 Descriptive Statistics 
+Year1.mean <- lapply(Year1, mean, na.rm=TRUE)
+Year1.min <- lapply(Year1, min, na.rm=TRUE)
+Year1.max <- lapply(Year1, max, na.rm=TRUE)
+Year1.median <- lapply(Year1, median, na.rm=TRUE)
+Year1.quantile <- lapply(Year1, quantile, na.rm=TRUE)
+
+Year1.mean <- round(as.numeric(Year1.mean), 3)
+
+v_tab <- cbind(mean=Year1.mean, min=Year1.min, max=Year1.max, median=Year1.median, quantile=Year1.quantile)
+kable(v_tab)
+```
+
+```{r}
+#Year3 Descriptive Statistics 
+Year3.mean <- lapply(Year3, mean, na.rm=TRUE)
+Year3.min <- lapply(Year3, min, na.rm=TRUE)
+Year3.max <- lapply(Year3, max, na.rm=TRUE)
+Year3.median <- lapply(Year3, median, na.rm=TRUE)
+Year3.quantile <- lapply(Year3, quantile, na.rm=TRUE)
+
+Year3.mean <- round(as.numeric(Year3.mean), 3)
+
+v_tab <- cbind(mean=Year3.mean, min=Year3.min, max=Year3.max, median=Year3.median, quantile=Year3.quantile)
+kable(v_tab)
+```
+
