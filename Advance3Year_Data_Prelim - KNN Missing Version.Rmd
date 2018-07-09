@@ -1,0 +1,190 @@
+---
+title: "Year1_Data_Prelim"
+author: "Brent Campbell"
+date: "June 13, 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+data2 <- read.csv(file="C:/Users/BCamp/Desktop/Capstone Project/DataYear3_v2.csv", header=TRUE, sep=",")
+str(data2)
+
+idx <- data2 == "?"
+is.na(data2) <- idx 
+```
+```{r}
+sum(is.na(data2))
+summary(data2)
+```
+
+```{r}
+library(VIM)
+
+Year3 <- kNN(data2, k=10)
+sum(is.na(Year3))
+summary(Year3)
+```
+
+```{r}
+#Remove logical columns 
+Year3.v2 <- Year3[, 1:62]
+str(Year3.v2)
+```
+
+
+
+```{r}
+
+#Cook's distance for outlier removal on multivariate data 
+
+#1. Build generalized linear model and run cook's distance on the data-set 
+mod <- glm(Bankruptcy.Outcome ~ ., data=Year3.v2)
+cooksd <- cooks.distance(mod)
+
+#Plot the outliers to determine scope of the problem 
+plot(cooksd, pch="*", cex=2, main="Influential Obs by Cooks distance")  # plot cook's distance
+abline(h = 4*mean(cooksd, na.rm=T), col="red")  # add cutoff line
+text(x=1:length(cooksd)+1, y=cooksd, labels=ifelse(cooksd>4*mean(cooksd, na.rm=T),names(cooksd),""), col="red")  # add labels
+
+#Identify influential rows of outliers 
+influential <- as.numeric(names(cooksd)[(cooksd > 4*mean(cooksd, na.rm=T))])
+print(Year3.v2[influential, ]) 
+```
+
+```{r}
+#Removal of influential rows from the data-set 
+Year3.v3 <- Year3.v2[-c(5,9,80,103,113,216,219,221,379,2232,5318,6255,7347,10011,10354,10379,10461,10469,10480), ]
+sum(is.na(Year3.v3))
+Year3.red <- Year3.v3[, 1:62]
+str(Year3.red)
+```
+
+
+```{r}
+#Normalize the data 
+normalize <- function(x) {
+               return ((x - min(x)) / (max(x) - min(x))) }
+Year3.Norm <- prc_n <- as.data.frame(lapply(Year3.v3[1:62], normalize))
+```
+
+```{r}
+#Export the data for recording and control purposes
+write.csv(Year3.Norm, "C:/Users/BCamp/Desktop/Capstone Project/Feature Selection/Year3.Norm.csv")
+```
+
+```{r}
+#Feature selection methodology #1 - Correlation Matrix 
+install.packages("mlbench")
+install.packages("caret")
+library(mlbench)
+library(caret)
+
+cor(Year3.Norm, Year3.Norm$Bankruptcy.Outcome)
+CorrelationMatrix <- cor(Year3.Norm[,1:61])
+
+
+```
+
+```{r}
+#Feature selection #2 use Logistic Regression
+fit_glm = glm(Bankruptcy.Outcome~., data=Year3.Norm ,family = "binomial")
+summary(fit_glm)
+varImp(fit_glm)
+```
+
+
+```{r}
+#Feature Selection through Random Forest 
+install.packages("party")
+library(party)
+rf1 <- cforest(Bankruptcy.Outcome ~ . , data = Year3.Norm, control=cforest_unbiased(mtry=2,ntree=50))
+varimp(rf1)
+varimpAUC(rf1)
+```
+
+
+
+
+```{r}
+#Assess the features using Step-wise regression method 
+base.mod <- lm(Bankruptcy.Outcome ~ 1 , data= Year3.Norm)
+all.mod <- lm(Bankruptcy.Outcome ~ . , data= Year3.Norm)
+stepMod <- step(base.mod, scope = list(lower = base.mod, upper = all.mod), direction = "both", trace = 0, steps = 1000)
+shortlistedVars <- names(unlist(stepMod[[1]]))
+shortlistedVars <- shortlistedVars[!shortlistedVars %in% "(Intercept)"]  
+print(shortlistedVars)
+```
+
+```{r}
+#Use Boruta method of feature selection : Version 1 
+install.packages("Boruta")
+library(Boruta)
+boruta_output <- Boruta(Bankruptcy.Outcome ~ ., data = Year3.Norm, doTrace=2)
+boruta_signif <- names(boruta_output$finalDecision[boruta_output$finalDecision %in% c("Confirmed", "Tentative")])
+print(boruta_output)
+print(boruta_signif)
+plot(boruta_output, cex.axis=.6, las=2, xlab="", main="Variable Importance")
+```
+
+```{r}
+boruta.df3 <- attStats(boruta_output)
+print(boruta.df3)
+str(boruta.df3)
+install.packages("xlsx")
+library(xlsx)
+write.xlsx(boruta.df3, "C:/Users/BCamp/Desktop/Capstone Project/Feature Selection/boruta.df3.xlsx")
+```
+
+
+
+
+
+```{r}
+#Apply PCA Feature Selection Method 
+Year3.x <-Year3.Norm[,1:61]
+Year3.pca.rawdata <- prcomp(Year3.x, scale = FALSE, center= FALSE)
+Year3.pca.rawdata
+
+head(as.matrix(Year3.x)%*%Year3.pca.rawdata$rotation)
+
+```
+
+```{r}
+plot(Year3.pca.rawdata, type = "l", main='without data normalization')
+```
+
+```{r}
+Year3.pca.normdata <- prcomp(Year3.x, scale = TRUE, center= TRUE)
+Year3.pca.normdata$rotation      # eigen vector / rotation matrix / tranformation matrix
+head(Year3.pca.normdata$x)
+```
+
+```{r}
+plot(Year3.pca.normdata, type = "l", main='with data normalization')
+```
+
+```{r}
+boxplot(Year3.pca.rawdata$x, main='Raw Data Transformation')
+boxplot(Year3.pca.normdata$x, main='Norm Data Transformation')
+boxplot(Year3.Norm, main='Original Data')
+```
+
+```{r}
+biplot(Year3.pca.rawdata, choices = 1:2, main='Raw Data')
+biplot(Year3.pca.normdata, choices = 1:2, main='Norm Data')
+```
+
+```{r}
+cor(Year3.x)
+```
+```{r}
+cor(Year3.pca.rawdata$x)
+```
+```{r}
+cor(Year3.pca.normdata$x)
+```
+
