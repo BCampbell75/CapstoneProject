@@ -1,0 +1,262 @@
+---
+title: "AnalyticalFile"
+author: "Brent Campbell"
+date: "July 5, 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r}
+Y1.Final <- read.csv(file="C:/Users/BCamp/Desktop/Capstone Project/Feature Selection/Year1Final.csv", header=TRUE, sep=",")
+
+str(Y1.Final)
+```
+
+
+```{r}
+
+#ANALYSIS 1-Year ADVANCE BANKRUPTCY PREDICTION
+
+#RUN THE MACHINE LEARNING ALGORITHMS FOR LOGISTIC REGRESSION, SVM, NAiVE BAYES and DECISION TREE
+install.packages("mlbench")
+library(mlbench)
+
+Y1.Final$Bankruptcy.Outcome <- factor(Y1.Final$Bankruptcy.Outcome)
+str(Y1.Final)
+
+install.packages("caret")
+library(caret)
+
+#SPLIT THE DATA SET INTO TRAINING AND TEST 
+set.seed(100)
+trainDataInd.Y1 <- createDataPartition(Y1.Final$Bankruptcy.Outcome, p=0.7, list = F)
+trainData.Y1 <- Y1.Final[trainDataInd.Y1, ]
+testData.Y1 <- Y1.Final[-trainDataInd.Y1, ]
+prop.table(table(trainData.Y1$Bankruptcy.Outcome))
+str(trainData.Y1)
+
+
+dim(trainData.Y1); dim(testData.Y1)
+
+#Under-sample to balance the training set
+install.packages("ROSE")
+library(ROSE)
+
+trainData.Y1_under <- ovun.sample(Bankruptcy.Outcome~.,data = trainData.Y1,method = "under",N=890)$data
+str(trainData.Y1)
+prop.table(table(trainData.Y1_under$Bankruptcy.Outcome))
+```
+
+
+```{r}
+#LOGISTIC REGRESSION MODEL 
+
+#NON-BALANCED VERSION 
+model.Y1 <- glm(Bankruptcy.Outcome~., family=binomial(link='logit'),data=trainData.Y1)
+summary(model.Y1)
+
+confusionMatrix(table(predict(model.Y1,type="response") >= 0.5, trainData.Y1$Bankruptcy.Outcome == 1))
+
+
+#BALANCED DATA VERSION
+model.Y1_under <- glm(Bankruptcy.Outcome~., family=binomial(link='logit'),data=trainData.Y1_under)
+summary(model.Y1_under)
+predict(model.Y1_under,type="response")
+confusionMatrix(table(predict(model.Y1_under,type="response") >= 0.5, trainData.Y1_under$Bankruptcy.Outcome == 1))
+
+#Test set prediction 
+glm_link_scores_Y1 <- predict(model.Y1_under,testData.Y1, type="link")
+glm_response_scores_Y1 <- predict(model.Y1_under,testData.Y1, type="response")
+
+install.packages("pROC")
+library("pROC")
+
+ROC.lr <- plot(roc(testData.Y1$Bankruptcy.Outcome, glm_response_scores_Y1, direction="<"),
+     col="blue", lwd=3, main="Bankruptcy Outcome")
+```
+
+
+
+```{r}
+#SVM MODEL
+
+#Train the SVM Model 
+#Rename factors 
+levels(trainData.Y1_under$Bankruptcy.Outcome) <- c("Solvent", "Insolvent")
+str(trainData.Y1_under)
+
+ctrl <- trainControl(method = "repeatedcv", #10 fold cross validation 
+                     repeats = 5, 
+                     summaryFunction = twoClassSummary,
+                     classProbs=TRUE)
+
+grid <- expand.grid(C = c(0.25, 0.5, 0.75, 1, 1.25, 1.5))
+ 
+svm.Y1 <- train(Bankruptcy.Outcome ~., data = trainData.Y1_under, 
+                method = "svmLinear",
+                preProc = c("center", "scale"),
+                metric = "ROC",
+                tuneGrid = grid,
+                trControl = ctrl)
+               
+svm.Y1
+
+
+
+
+
+
+
+
+
+
+
+
+#Test the prediction and confusion matrix 
+test_pred_SVM <- predict(svm.Y1, newdata = testData.Y1)
+test_pred_SVM
+confusionMatrix(test_pred_SVM, testData.Y1$Bankruptcy.Outcome) 
+
+#ROC Curve 
+install.packages("ROCR")
+library(ROCR)
+
+
+
+#Tune the Model 
+
+
+
+```
+
+```{r}
+#Naive Bayes Model 
+install.packages("mlr")
+library(mlr)
+
+NBtask.Y1 = makeClassifTask(data = Y1.Final, target = "Bankruptcy.Outcome")
+selected_model.Y1 = makeLearner("classif.naiveBayes")
+
+NB_mlr = train(selected_model.Y1, NBtask.Y1)
+NB_mlr$learner.model
+
+predictions_mlr = as.data.frame(predict(NB_mlr, newdata = Y1.Final[,1:12]))
+table(predictions_mlr[,1],Y1.Final$Bankruptcy.Outcome)
+```
+
+
+```{r}
+#Naive Bayes Classified - Version 2 
+
+install.packages("e1071")
+library(e1071)
+
+NB.model.Y1 <- naiveBayes(Bankruptcy.Outcome~., data=trainData.Y1_under)
+NB.model.Y1
+
+NB_Predictions.Y1 = predict(NB.model.Y1,testData.Y1)
+#Confusion matrix to check accuracy
+table(NB_Predictions.Y1,testData.Y1$Bankruptcy.Outcome)
+```
+
+
+
+
+
+
+
+
+```{r}
+#CLASSIFICATION TREE MODEL 
+
+install.packages("rpart")
+install.packages("rattle")
+library(rpart)
+library(rattle)
+
+Y1.tree <- rpart(Bankruptcy.Outcome~., data = trainData.Y1, method = "class")
+Y1.tree
+
+fancyRpartPlot(Y1.tree, main = "Bankruptcy Outcome")
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
