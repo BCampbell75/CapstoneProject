@@ -1,0 +1,247 @@
+---
+title: "AnalyticalFile - Y1"
+author: "Brent Campbell"
+date: "July 17, 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+Y3.Final <- read.csv(file="C:/Users/BCamp/Desktop/Capstone Project/Feature Selection/Year3Final.csv", header=TRUE, sep=",")
+
+str(Y3.Final)
+```
+
+
+```{r}
+
+#ANALYSIS 3-Year ADVANCE BANKRUPTCY PREDICTION
+
+#RUN THE MACHINE LEARNING ALGORITHMS FOR SVM, Naive Bayes, Decision Tree, and Neural Networks
+install.packages("mlbench", repos = "http://cran.us.r-project.org")
+library(mlbench)
+
+Y3.Final$Bankruptcy.Outcome <- factor(Y3.Final$Bankruptcy.Outcome)
+summary(Y3.Final)
+
+#Install required packages for analysis 
+
+install.packages("lattice", repos = "http://cran.us.r-project.org")
+install.packages("Rcpp", repos = "http://cran.us.r-project.org")
+install.packages("ggplot2", repos = "http://cran.us.r-project.org")
+install.packages("ipred", repos = "http://cran.us.r-project.org")
+install.packages("caret", repos = "http://cran.us.r-project.org")
+install.packages("pROC", repos = "http://cran.us.r-project.org")
+install.packages("ROCR", repos = "http://cran.us.r-project.org")
+
+library(lattice)
+library(Rcpp)
+library(ggplot2)
+library(ipred)
+library(caret)
+library(pROC)
+library(ROCR)
+
+#Divide balanced data-set between training and test. 
+set.seed(100)
+trainDataInd.Y3 <- createDataPartition(Y3.Final$Bankruptcy.Outcome, p=0.7, list = F)
+trainData.Y3_v1 <- Y3.Final[trainDataInd.Y3, ]
+testData.Y3 <- Y3.Final[-trainDataInd.Y3, ]
+
+str(trainData.Y3_v1)
+str(testData.Y3)
+
+#Given heavy weighting of Solvent vs. Insolvent (0 vs. 1), I'm going to balance the training data-set by using 
+#under-sampling, provided within the 'ROSE' package 
+install.packages("ROSE", repos = "http://cran.us.r-project.org")
+library(ROSE)
+
+trainData.Y3 <- ovun.sample(Bankruptcy.Outcome~.,data = trainData.Y3_v1,method = "under",N=1380)$data
+prop.table(table(trainData.Y3$Bankruptcy.Outcome))
+
+levels(trainData.Y3$Bankruptcy.Outcome) <- c("Solvent", "Insolvent")
+levels(testData.Y3$Bankruptcy.Outcome) <- c("Solvent", "Insolvent")
+
+str(trainData.Y3)
+str(testData.Y3)
+```
+
+
+```{r}
+#SVM MODEL
+
+#Train the SVM Model 
+
+#LINEAR MODEL FOR SVM
+ctrl <- trainControl(method = "repeatedcv", #10 fold cross validation 
+                     repeats = 5, 
+                     summaryFunction = twoClassSummary,
+                     classProbs=TRUE)
+
+grid <- expand.grid(C = c(0.25, 0.5, 0.75, 1, 1.25, 1.5))
+ 
+svmLin.Y3 <- train(Bankruptcy.Outcome ~., data = trainData.Y3, 
+                method = "svmLinear",
+                preProc = c("center", "scale"),
+                metric = "ROC",
+                tuneGrid = grid,
+                trControl = ctrl)
+svmLin.Y3
+
+#RADIAL MODEL FOR SVM
+grid <- expand.grid(sigma = c(.01, .015, 0.2),
+                    C = c(0.25,0.5,0.75,1,1.25,1.5))
+ 
+svmRad.Y3 <- train(Bankruptcy.Outcome ~., data = trainData.Y3, 
+                method = "svmRadial",
+                preProc = c("center", "scale"),
+                metric = "ROC",
+                tuneGrid = grid,
+                trControl = ctrl)
+svmRad.Y3
+
+#POLYNOMIAL MODEL FOR SVM
+grid <- expand.grid(C = c(0.25,0.5,0.75,1,1.25,1.5),
+                    degree=c(1, 2, 3),
+                    scale=c(0.001,0.01,0.1))
+grid
+svmPoly.Y3 <- train(Bankruptcy.Outcome ~., data = trainData.Y3, 
+                method = "svmRadial",
+                preProc = c("center", "scale"),
+                metric = "ROC",
+                tuneLength = 3,
+                trControl = ctrl)
+svmPoly.Y3
+
+# Resamples 
+comparisons <- resamples(list(Linear=svmLin.Y3, Radial=svmRad.Y3, Polynomial=svmPoly.Y3))
+summary(comparisons)
+comparisons$values
+
+# Plot
+bwplot(comparisons,metric="ROC")
+
+#Predict
+svm_probs <- predict(svmPoly.Y3, newdata=testData.Y3, type="prob")
+auc <- auc(testData.Y3$Bankruptcy.Outcome, svm_probs[,2])
+svm_plot <- plot(roc(testData.Y3$Bankruptcy.Outcome, svm_probs[,2]), col="blue")
+auc
+
+
+```
+
+
+```{r}
+#Naive Bayes model 
+
+library(caret)
+TrainingParameters <- trainControl(method = "repeatedcv", number = 10, repeats=10)
+
+grid_nb <- expand.grid(usekernel = c(TRUE, FALSE),
+  fL = 0:5,
+  adjust = seq(0, 5, by = 1)
+)
+
+nb.model <- train(trainData.Y1[,-13], trainData.Y1$Bankruptcy.Outcome,
+                  method = "nb",
+                  trControl= TrainingParameters,
+                  tuneGrid=grid_nb)
+                  
+
+nb_probs <- predict(nb.model, newdata=testData.Y1, type="prob")
+auc <- auc(testData.Y1$Bankruptcy.Outcome, nb_probs[,2])
+nb_plot <- plot(roc(testData.Y1$Bankruptcy.Outcome, nb_probs[,2]), col="red")
+auc
+
+
+```
+
+
+```{r}
+#Classification Tree model 
+
+library(caret)
+TrainingParameters <- trainControl(method = "repeatedcv", number = 10, repeats=10)
+
+dt.model = train(Bankruptcy.Outcome ~., 
+                  data=trainData.Y3,
+                  method="C5.0", 
+                  trControl = TrainingParameters,
+                 tuneLength = 10)
+
+dt.model
+
+
+
+## ROC curve and AUC 
+
+dt_probs <- predict(dt.model, newdata=testData.Y3, type="prob")
+auc <- auc(testData.Y3$Bankruptcy.Outcome, dt_probs[,2])
+plot(roc(testData.Y3$Bankruptcy.Outcome, dt_probs[,2]), col="forestgreen")
+auc
+```
+
+
+
+```{r}
+#Neural Network Model 
+
+library(caret)
+TrainingParameters <- trainControl(method = "repeatedcv", number = 10, repeats=10)
+
+grid_nn <- expand.grid(.decay = 0.1, .size =5)
+
+nn.model <- train(trainData.Y3[,-13], trainData.Y3$Bankruptcy.Outcome,
+                  method = "nnet",
+                  trControl= TrainingParameters,
+                  tuneGrid = grid_nn)
+
+nn_probs <- predict(nn.model, newdata=testData.Y3, type="prob")
+auc <- auc(testData.Y3$Bankruptcy.Outcome, nn_probs[,2])
+nn_plot <- plot(roc(testData.Y3$Bankruptcy.Outcome, nn_probs[,2]),col="orange2")
+auc
+```
+
+
+
+
+
+```{r}
+#Plot ROC curves on one plot
+
+
+library(ROCR)
+comb.plot <- plot(roc(testData.Y3$Bankruptcy.Outcome, svm_probs[,2]), col="blue")
+comb.plot <- plot(roc(testData.Y3$Bankruptcy.Outcome, nb_probs[,2]), col="red", add=TRUE)
+comb.plot <- plot(roc(testData.Y3$Bankruptcy.Outcom, dt_probs[,2]), col="forestgreen", add=TRUE)
+comb.plot <- plot(roc(testData.Y3$Bankruptcy.Outcom, nn_probs[,2]), col="orange2", add=TRUE)
+
+```
+
+
+
+
+```{r}
+#Confusion Matrices 
+
+# SVM confusion matrix 
+test_pred_SVM <- predict(svmRad.Y3, newdata = testData.Y3, type="raw")
+confusionMatrix(test_pred_SVM, testData.Y3$Bankruptcy.Outcome)
+
+# Naive Bayes Matrix
+test_pred_nb <- predict(nb.model, newdata = testData.Y3, type="raw")
+confusionMatrix(test_pred_nb, testData.Y3$Bankruptcy.Outcome)
+
+# DT Matrix 
+test_pred_dt <- predict(dt.model, newdata = testData.Y3, type="raw")
+confusionMatrix(test_pred_dt, testData.Y3$Bankruptcy.Outcome)
+
+
+test_pred_nn <- predict(nn.model, newdata = testData.Y3, type="raw")
+confusionMatrix(test_pred_nn, testData.Y3$Bankruptcy.Outcome)
+
+```
+
